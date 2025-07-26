@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package inference;
+
+option go_package = "murmur/go-server/gen/go/inference";
+option csharp_namespace = "Inference";
+
+service InferenceService {
+  rpc TranscribeStream(stream AudioChunk) returns (TextResponse);
+  rpc FormatText(TextRequest) returns (TextResponse);
+  rpc TranscribeAndFix(stream AudioChunk) returns (TextResponse);
+}
+
+// ====== Messages ======
+
+message TextRequest {
+  string text = 1;
+}
+
+message TextResponse {
+  string text = 1;
+}
+
+message AudioChunk {
+  bytes audio_bytes = 1;
+}
