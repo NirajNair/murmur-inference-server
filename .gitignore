@@ -21,3 +21,6 @@ dist/
 
 # OS-specific
 .DS_Store
+
+# Models
+models/
