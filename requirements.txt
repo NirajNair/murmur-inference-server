@@ -3,3 +3,4 @@ grpcio-tools
 protobuf
 faster-whisper
 llama-cpp-python
+ffmpeg-python
