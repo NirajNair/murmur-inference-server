@@ -4,17 +4,15 @@ from faster_whisper import WhisperModel
 from llama_cpp import Llama
 import grpc
 from concurrent import futures
-import sys
 import os
-import inference_pb2
-import inference_pb2_grpc
+from server import inference_pb2
+from server import inference_pb2_grpc
 from services.audio_utils import (
     universal_audio_to_pcm,
     inspect_audio_bytes,
     reconstruct_wav_from_chunks,
 )
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "server"))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

@@ -3,12 +3,10 @@ from concurrent import futures
 import time
 import logging
 import argparse
-import sys
-import os
-import inference_pb2_grpc
-from services.inference_service import InferenceServiceImpl
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from . import inference_pb2_grpc
+from . import inference_pb2
+from services.inference_service import InferenceServiceImpl
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

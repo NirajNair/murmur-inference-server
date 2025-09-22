@@ -3,7 +3,6 @@ import os
 import uuid
 import numpy as np
 import ffmpeg
-from pydub import AudioSegment
 from typing import Union, Tuple, Optional
 import struct
 import logging
@@ -225,14 +224,7 @@ def universal_audio_to_pcm(
                 errors.append(f"FFmpeg {fmt}: {str(e)}")
                 logger.debug(f"FFmpeg {fmt} assumption failed: {e}")
 
-    # Strategy 4: Fallback to pydub
-    try:
-        return _pydub_convert(audio_bytes, target_sample_rate)
-    except Exception as e:
-        errors.append(f"Pydub: {str(e)}")
-        logger.debug(f"Pydub fallback failed: {e}")
-
-    # Strategy 5: Last resort - treat as raw PCM
+    # Strategy 4: Last resort - treat as raw PCM
     try:
         return _raw_pcm_convert(audio_bytes, target_sample_rate, target_channels)
     except Exception as e:
