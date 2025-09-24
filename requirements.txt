@@ -4,3 +4,4 @@ protobuf
 faster-whisper
 llama-cpp-python
 ffmpeg-python
+python-dotenv

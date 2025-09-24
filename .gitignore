@@ -24,3 +24,5 @@ dist/
 
 # Models
 models/
+
+.env

@@ -12,8 +12,8 @@ from services.audio_utils import (
     inspect_audio_bytes,
     reconstruct_wav_from_chunks,
 )
+from config import config
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -22,7 +22,7 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
         self.model_size = model_size
         self.device = device
         self.model: Optional[WhisperModel] = None
-        self.llama_model: Optional[Llama] = None
+        self.llm_model: Optional[Llama] = None
         self._load_models()
 
     def _load_models(self):
@@ -35,22 +35,19 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
             raise
 
         try:
-            models_dir = os.path.join(os.path.dirname(__file__), "..", "models")
-            llama_model_path = os.path.join(
-                models_dir, "Llama-3.1-8B-Instruct-Q4_K_M.gguf"
-            )
-            logger.info(f"Loading Llama model from: {llama_model_path}")
-            self.llama_model = Llama(
-                model_path=llama_model_path,
-                n_ctx=2048,
-                n_threads=4,
+            llm_model_path = config.get_llm_model_path()
+            logger.info(f"Loading LLM model from: {llm_model_path}")
+            self.llm_model = Llama(
+                model_path=llm_model_path,
+                n_ctx=config.LLM_N_CTX,
+                n_threads=config.LLM_N_THREADS,
                 verbose=False,
             )
-            logger.info("Llama model loaded successfully")
+            logger.info("LLM model loaded successfully")
         except Exception as e:
-            logger.error(f"Failed to load Llama model: {str(e)}")
+            logger.error(f"Failed to load LLM model: {str(e)}")
             logger.warning("Text correction will fall back to basic formatting")
-            self.llama_model = None
+            self.llm_model = None
 
     def _create_correction_prompt(self, text: str) -> str:
         """Create a Wispr Flow-inspired prompt for text correction."""
@@ -99,30 +96,33 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
 
             """
 
-    def _correct_text_with_llama(self, text: str) -> str:
-        if not self.llama_model or not text.strip():
+    def _correct_text_with_llm(self, text: str) -> str:
+        if not self.llm_model or not text.strip():
             return text
 
         try:
             prompt = self._create_correction_prompt(text)
-            result = self.llama_model(
+            result = self.llm_model(
                 prompt,
-                max_tokens=512,
-                temperature=0.3,
-                top_p=0.9,
+                max_tokens=config.LLM_MAX_TOKENS,
+                temperature=config.LLM_TEMPERATURE,
+                top_p=config.LLM_TOP_P,
                 stop=["<|eot_id|>", "\n\n"],
                 echo=False,
             )
             corrected_text = result["choices"][0]["text"].strip()
-            if not corrected_text or len(corrected_text) < len(text) * 0.3:
+            if (
+                not corrected_text
+                or len(corrected_text) < len(text) * config.LLM_CORRECTION_THRESHOLD
+            ):
                 logger.warning(
-                    "Llama correction resulted in unusually short text, using original"
+                    "LLM correction resulted in unusually short text, using original"
                 )
                 return text
             return corrected_text
 
         except Exception as e:
-            logger.error(f"Llama text correction failed: {str(e)}")
+            logger.error(f"LLM text correction failed: {str(e)}")
             return text
 
     def TranscribeStream(
@@ -155,10 +155,11 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
 
             try:
                 pcm_audio = universal_audio_to_pcm(
-                    combined_audio_bytes, target_sample_rate=16000
+                    combined_audio_bytes,
+                    target_sample_rate=config.AUDIO_TARGET_SAMPLE_RATE,
                 )
                 logger.info(
-                    f"Converted to PCM: {pcm_audio.shape} samples, duration: {len(pcm_audio)/16000:.2f}s"
+                    f"Converted to PCM: {pcm_audio.shape} samples, duration: {len(pcm_audio)/config.AUDIO_TARGET_SAMPLE_RATE:.2f}s"
                 )
             except ValueError as e:
                 logger.error(f"Universal audio conversion failed: {str(e)}")
@@ -177,7 +178,7 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
                     f"  - First 32 bytes (hex): {combined_audio_bytes[:32].hex()}"
                 )
                 logger.error(f"  - Inspection result: {inspection}")
-                if inspection.get("zero_percentage", 0) > 0.9:
+                if inspection.get("zero_percentage", 0) > config.AUDIO_ZERO_THRESHOLD:
                     logger.error("🚨 CLIENT ISSUE DETECTED:")
                     logger.error("   Your client is sending mostly/all zero bytes!")
                     logger.error("   This suggests:")
@@ -226,16 +227,16 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
             logger.info(
                 f"FormatText received: '{input_text[:100]}{'...' if len(input_text) > 100 else ''}'"
             )
-            if self.llama_model:
+            if self.llm_model:
                 try:
-                    corrected_text = self._correct_text_with_llama(input_text)
+                    corrected_text = self._correct_text_with_llm(input_text)
                     logger.info(
-                        f"Llama correction completed: '{corrected_text[:100]}{'...' if len(corrected_text) > 100 else ''}'"
+                        f"LLM correction completed: '{corrected_text[:100]}{'...' if len(corrected_text) > 100 else ''}'"
                     )
                     return inference_pb2.TextResponse(text=corrected_text)
                 except Exception as e:
                     logger.error(
-                        f"Llama correction failed, falling back to basic formatting: {str(e)}"
+                        f"LLM correction failed, falling back to basic formatting: {str(e)}"
                     )
 
             formatted_text = input_text.strip()

@@ -6,6 +6,7 @@ import ffmpeg
 from typing import Union, Tuple, Optional
 import struct
 import logging
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def inspect_audio_bytes(audio_bytes: bytes) -> dict:
         zero_count = audio_bytes.count(0)
         zero_percentage = zero_count / len(audio_bytes)
         info["zero_percentage"] = zero_percentage
-        if zero_percentage > 0.95:
+        if zero_percentage > config.AUDIO_ZERO_THRESHOLD:
             info["is_empty_or_zeros"] = True
 
     if len(audio_bytes) >= 12:
@@ -71,8 +72,11 @@ def inspect_audio_bytes(audio_bytes: bytes) -> dict:
 
 
 def smart_audio_to_pcm(
-    audio_bytes: bytes, target_sample_rate: int = 16000
+    audio_bytes: bytes, target_sample_rate: int = None
 ) -> np.ndarray:
+    if target_sample_rate is None:
+        target_sample_rate = config.AUDIO_TARGET_SAMPLE_RATE
+
     inspection = inspect_audio_bytes(audio_bytes)
     try:
         return convert_any_audio_to_pcm(audio_bytes, "wav", target_sample_rate)
@@ -83,9 +87,12 @@ def smart_audio_to_pcm(
 
 
 def convert_any_audio_to_pcm(
-    audio_bytes: bytes, audio_format: str = "wav", target_sample_rate: int = 16000
+    audio_bytes: bytes, audio_format: str = "wav", target_sample_rate: int = None
 ) -> np.ndarray:
-    debug_dir = "debug_audio"
+    if target_sample_rate is None:
+        target_sample_rate = config.AUDIO_TARGET_SAMPLE_RATE
+
+    debug_dir = config.get_audio_debug_dir()
     if not os.path.exists(debug_dir):
         os.makedirs(debug_dir)
 
@@ -110,8 +117,8 @@ def convert_any_audio_to_pcm(
         else:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
 
-        if audio_segment.channels > 1:
-            audio_segment = audio_segment.set_channels(1)
+        if audio_segment.channels > config.AUDIO_TARGET_CHANNELS:
+            audio_segment = audio_segment.set_channels(config.AUDIO_TARGET_CHANNELS)
 
         if audio_segment.frame_rate != target_sample_rate:
             audio_segment = audio_segment.set_frame_rate(target_sample_rate)
@@ -130,19 +137,19 @@ def reconstruct_wav_from_chunks(chunks: list[bytes]) -> bytes:
         return b""
 
     first_chunk = chunks[0]
-    if len(first_chunk) < 44:
+    if len(first_chunk) < config.AUDIO_HEADER_SIZE:
         raise ValueError("First chunk is too small to contain a WAV header.")
 
-    header = first_chunk[:44]
-    data_size = sum(len(chunk) for chunk in chunks) - 44
+    header = first_chunk[: config.AUDIO_HEADER_SIZE]
+    data_size = sum(len(chunk) for chunk in chunks) - config.AUDIO_HEADER_SIZE
     new_header = bytearray(header)
     riff_chunk_size = data_size + 36
     new_header[4:8] = struct.pack("<I", riff_chunk_size)
     new_header[40:44] = struct.pack("<I", data_size)
     full_audio = bytearray()
     full_audio.extend(new_header)
-    if len(first_chunk) > 44:
-        full_audio.extend(first_chunk[44:])
+    if len(first_chunk) > config.AUDIO_HEADER_SIZE:
+        full_audio.extend(first_chunk[config.AUDIO_HEADER_SIZE :])
 
     for chunk in chunks[1:]:
         full_audio.extend(chunk)
@@ -151,8 +158,14 @@ def reconstruct_wav_from_chunks(chunks: list[bytes]) -> bytes:
 
 
 def universal_audio_to_pcm(
-    audio_bytes: bytes, target_sample_rate: int = 16000, target_channels: int = 1
+    audio_bytes: bytes, target_sample_rate: int = None, target_channels: int = None
 ) -> np.ndarray:
+    if target_sample_rate is None:
+        target_sample_rate = config.AUDIO_TARGET_SAMPLE_RATE
+
+    if target_channels is None:
+        target_channels = config.AUDIO_TARGET_CHANNELS
+
     """
     Universal audio conversion method that works with ANY audio format.
     Uses multiple fallback strategies to ensure conversion always succeeds.
@@ -161,8 +174,7 @@ def universal_audio_to_pcm(
     1. Try FFmpeg with auto-detection (most robust)
     2. Try FFmpeg with detected format hint
     3. Try FFmpeg with common format assumptions
-    4. Fallback to pydub (original method)
-    5. Last resort: treat as raw PCM
+    4. Last resort: treat as raw PCM
 
     Args:
         audio_bytes: Raw audio data in any format
@@ -183,8 +195,8 @@ def universal_audio_to_pcm(
         f"Converting audio: {len(audio_bytes)} bytes, detected format: {inspection.get('detected_format', 'unknown')}"
     )
     debug_filename = None
-    if logger.isEnabledFor(logging.DEBUG):
-        debug_dir = "debug_audio"
+    if logger.isEnabledFor(logging.DEBUG) and config.ENABLE_DEBUG_AUDIO:
+        debug_dir = config.get_audio_debug_dir()
         if not os.path.exists(debug_dir):
             os.makedirs(debug_dir)
         debug_filename = os.path.join(debug_dir, f"audio_{uuid.uuid4()}.bin")
@@ -302,18 +314,15 @@ def _ffmpeg_convert_with_format(
     return audio_array
 
 
-def _pydub_convert(audio_bytes: bytes, target_sample_rate: int) -> np.ndarray:
-    """Pydub fallback conversion (existing method)."""
-    return smart_audio_to_pcm(audio_bytes, target_sample_rate)
-
-
 def _raw_pcm_convert(
     audio_bytes: bytes, target_sample_rate: int, target_channels: int
 ) -> np.ndarray:
-    if len(audio_bytes) < 1000:
+    if len(audio_bytes) < config.AUDIO_CHUNK_SIZE_THRESHOLD:
         raise ValueError("Audio data too short for raw PCM interpretation")
 
-    data_start = 44 if len(audio_bytes) > 44 else 0
+    data_start = (
+        config.AUDIO_HEADER_SIZE if len(audio_bytes) > config.AUDIO_HEADER_SIZE else 0
+    )
     pcm_data = audio_bytes[data_start:]
     for dtype, divisor in [
         (np.int16, 32768.0),
