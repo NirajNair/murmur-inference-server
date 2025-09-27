@@ -20,6 +20,7 @@ class Config:
         # Model Configuration
         self.WHISPER_MODEL_SIZE = self._get_required_str("WHISPER_MODEL_SIZE")
         self.WHISPER_DEVICE = self._get_required_str("WHISPER_DEVICE")
+        self.WHISPER_COMPUTE_TYPE = self._get_required_str("WHISPER_COMPUTE_TYPE")
         self.LLM_MODEL_PATH = self._get_required_str("LLM_MODEL_PATH")
         self.LLM_N_CTX = self._get_required_int("LLM_N_CTX")
         self.LLM_N_THREADS = self._get_required_int("LLM_N_THREADS")

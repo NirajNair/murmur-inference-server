@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=config.MAX_WORKERS))
-    inference_service = InferenceServiceImpl(
-        model_size=config.WHISPER_MODEL_SIZE, device=config.WHISPER_DEVICE
-    )
+    inference_service = InferenceServiceImpl()
     inference_pb2_grpc.add_InferenceServiceServicer_to_server(inference_service, server)
     listen_addr = f"[{config.SERVER_HOST}]:{config.SERVER_PORT}"
     server.add_insecure_port(listen_addr)
