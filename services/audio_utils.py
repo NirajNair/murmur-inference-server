@@ -1,9 +1,6 @@
-import io
-import os
-import uuid
 import numpy as np
 import ffmpeg
-from typing import Union, Tuple, Optional
+from typing import Optional
 import struct
 import logging
 from config import config
@@ -71,67 +68,6 @@ def inspect_audio_bytes(audio_bytes: bytes) -> dict:
     return info
 
 
-def smart_audio_to_pcm(
-    audio_bytes: bytes, target_sample_rate: int = None
-) -> np.ndarray:
-    if target_sample_rate is None:
-        target_sample_rate = config.AUDIO_TARGET_SAMPLE_RATE
-
-    inspection = inspect_audio_bytes(audio_bytes)
-    try:
-        return convert_any_audio_to_pcm(audio_bytes, "wav", target_sample_rate)
-    except Exception as e:
-        raise ValueError(
-            f"Unable to convert audio data. Inspection: {inspection}. Last error: {str(e)}"
-        )
-
-
-def convert_any_audio_to_pcm(
-    audio_bytes: bytes, audio_format: str = "wav", target_sample_rate: int = None
-) -> np.ndarray:
-    if target_sample_rate is None:
-        target_sample_rate = config.AUDIO_TARGET_SAMPLE_RATE
-
-    debug_dir = config.get_audio_debug_dir()
-    if not os.path.exists(debug_dir):
-        os.makedirs(debug_dir)
-
-    file_extension = audio_format.lower()
-    debug_filename = os.path.join(
-        debug_dir, f"received_audio_{uuid.uuid4()}.{file_extension}"
-    )
-    with open(debug_filename, "wb") as f:
-        f.write(audio_bytes)
-
-    try:
-        if audio_format.lower() == "wav":
-            audio_segment = AudioSegment.from_wav(io.BytesIO(audio_bytes))
-        elif audio_format.lower() == "mp3":
-            audio_segment = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
-        elif audio_format.lower() == "flac":
-            audio_segment = AudioSegment.from_flac(io.BytesIO(audio_bytes))
-        elif audio_format.lower() in ["m4a", "mp4"]:
-            audio_segment = AudioSegment.from_file(
-                io.BytesIO(audio_bytes), format="mp4"
-            )
-        else:
-            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
-
-        if audio_segment.channels > config.AUDIO_TARGET_CHANNELS:
-            audio_segment = audio_segment.set_channels(config.AUDIO_TARGET_CHANNELS)
-
-        if audio_segment.frame_rate != target_sample_rate:
-            audio_segment = audio_segment.set_frame_rate(target_sample_rate)
-
-        raw_audio = audio_segment.raw_data
-        audio_array = np.frombuffer(raw_audio, dtype=np.int16)
-        audio_array = audio_array.astype(np.float32) / 32768.0
-        return audio_array
-
-    except Exception as e:
-        raise ValueError(f"Failed to convert {audio_format} bytes to PCM: {str(e)}")
-
-
 def reconstruct_wav_from_chunks(chunks: list[bytes]) -> bytes:
     if not chunks:
         return b""
@@ -194,18 +130,7 @@ def universal_audio_to_pcm(
     logger.info(
         f"Converting audio: {len(audio_bytes)} bytes, detected format: {inspection.get('detected_format', 'unknown')}"
     )
-    debug_filename = None
-    if logger.isEnabledFor(logging.DEBUG) and config.ENABLE_DEBUG_AUDIO:
-        debug_dir = config.get_audio_debug_dir()
-        if not os.path.exists(debug_dir):
-            os.makedirs(debug_dir)
-        debug_filename = os.path.join(debug_dir, f"audio_{uuid.uuid4()}.bin")
-        with open(debug_filename, "wb") as f:
-            f.write(audio_bytes)
-        logger.debug(f"Debug audio saved: {debug_filename}")
-
     errors = []
-
     # Strategy 1: FFmpeg with auto-detection
     try:
         return _ffmpeg_convert_auto(audio_bytes, target_sample_rate, target_channels)
@@ -248,7 +173,6 @@ def universal_audio_to_pcm(
         f"All audio conversion methods failed. "
         f"Audio info: {inspection}. "
         f"Errors: {error_summary}"
-        + (f". Debug file: {debug_filename}" if debug_filename else "")
     )
 
 
