@@ -10,5 +10,13 @@ install:
 run:
 	source $(VENV_DIR)/bin/activate && clear && $(PYTHON) -m server.server
 
+run-docker:
+	docker compose up -d
+	
+stop-docker:
+	docker compose down
+
+restart-docker: stop-docker run-docker
+	
 clean:
 	rm -rf $(VENV_DIR) __pycache__
