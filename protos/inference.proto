@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package inference;
 
-option go_package = "murmur/go-server/gen/go/inference";
 option csharp_namespace = "Inference";
 
 service InferenceService {
