@@ -1,31 +1,94 @@
 import logging
-from typing import Optional
+import threading
+import time
+import queue
+from typing import Optional, List
 from llama_cpp import Llama
 from config import config
 
 logger = logging.getLogger(__name__)
 
 
-class LLMService:
-    def __init__(self):
-        self.llm_model: Optional[Llama] = None
+class LLMModelInstance:
+    def __init__(self, instance_id: int):
+        self.instance_id = instance_id
+        self.model: Optional[Llama] = None
         self._load_model()
 
     def _load_model(self):
         try:
             llm_model_path = config.get_llm_model_path()
-            logger.info(f"Loading LLM model from: {llm_model_path}")
-            self.llm_model = Llama(
+            logger.info(
+                f"Loading LLM model instance {self.instance_id} from: {llm_model_path}"
+            )
+            self.model = Llama(
                 model_path=llm_model_path,
                 n_ctx=config.LLM_N_CTX,
                 n_threads=config.LLM_N_THREADS,
+                n_batch=config.LLM_N_BATCH,
+                n_ubatch=config.LLM_N_UBATCH,
                 verbose=False,
+                use_mlock=True,
+                top_k=config.LLM_TOP_K,
+                top_p=config.LLM_TOP_P,
+                temperature=config.LLM_TEMPERATURE,
             )
-            logger.info("LLM model loaded successfully")
+            logger.info(f"LLM model instance {self.instance_id} loaded successfully")
         except Exception as e:
-            logger.error(f"Failed to load LLM model: {str(e)}")
-            logger.warning("Text correction will fall back to basic formatting")
-            self.llm_model = None
+            logger.error(
+                f"Failed to load LLM model instance {self.instance_id}: {str(e)}"
+            )
+            self.model = None
+
+    def is_available(self) -> bool:
+        return self.model is not None
+
+    def correct(self, prompt: str) -> Optional[str]:
+        if not self.model:
+            return None
+
+        try:
+            result = self.model(
+                prompt,
+                max_tokens=config.LLM_MAX_TOKENS,
+                temperature=config.LLM_TEMPERATURE,
+                top_p=config.LLM_TOP_P,
+                stop=["<|eot_id|>", "\n\n"],
+                echo=False,
+            )
+            return result["choices"][0]["text"].strip()
+        except Exception as e:
+            logger.error(f"Instance {self.instance_id} generation failed: {str(e)}")
+            return None
+
+
+class LLMService:
+    def __init__(self):
+        self.pool_size = config.LLM_POOL_SIZE
+        self.model_instances: List[LLMModelInstance] = []
+        self.instance_queue: queue.Queue = queue.Queue()
+        self._load_model_pool()
+        self.warmup()
+
+    def _load_model_pool(self):
+        logger.info(f"Creating LLM pool with {self.pool_size} instance(s)")
+        for i in range(self.pool_size):
+            instance = LLMModelInstance(instance_id=i)
+            if instance.is_available():
+                self.model_instances.append(instance)
+                self.instance_queue.put(instance)
+            else:
+                logger.warning(
+                    f"Failed to load instance {i}, pool will have fewer instances"
+                )
+
+        if not self.model_instances:
+            logger.error("No LLM instances loaded successfully!")
+
+        else:
+            logger.info(
+                f"LLM pool ready with {len(self.model_instances)}/{self.pool_size} instances. "
+            )
 
     def _create_correction_prompt(self, text: str) -> str:
         return f"""You are an expert text correction assistant specialized in fixing speech-to-text transcription errors. Your task is to correct grammar, spelling, punctuation, and formatting while preserving the original meaning and intent.
@@ -41,14 +104,9 @@ class LLMService:
 
             Smart Formatting Commands:
             When you detect dictation commands with 80%+ confidence based on context, convert them appropriately:
-            • "period" / "full stop" → .
-            • "comma" → ,
-            • "question mark" → ?
-            • "exclamation point" / "exclamation mark" → !
             • "new line" / "new paragraph" → line break
             • "bullet point" / "dash" → • (when creating lists)
             • "number one, number two" → 1. 2. (when creating numbered lists)
-            • "bold [text]" / "italic [text]" → apply only if clearly intentional formatting
 
             Quality Guidelines:
             • Preserve the speaker's voice, style, and personality
@@ -67,24 +125,19 @@ class LLMService:
             • When uncertain about a correction, err on the side of minimal changes
             • Never translate or alter words in any language other than English; retain all original foreign-language text verbatim.
 
-            Please correct this transcribed text: {text}
+            Please correct this transcribed text: {text}\n\nCorrected:
             """
 
     def correct_text(self, text: str) -> str:
-        if not self.llm_model or not text.strip():
+        if not self.model_instances or not text.strip():
             return text
 
+        instance: Optional[LLMModelInstance] = None
         try:
-            prompt = self._create_correction_prompt(text)
-            result = self.llm_model(
-                prompt,
-                max_tokens=config.LLM_MAX_TOKENS,
-                temperature=config.LLM_TEMPERATURE,
-                top_p=config.LLM_TOP_P,
-                stop=["<|eot_id|>", "\n\n"],
-                echo=False,
+            instance = self.instance_queue.get(timeout=config.LLM_REQUEST_TIMEOUT)
+            corrected_text = instance.correct(
+                prompt=self._create_correction_prompt(text),
             )
-            corrected_text = result["choices"][0]["text"].strip()
             if (
                 not corrected_text
                 or len(corrected_text) < len(text) * config.LLM_CORRECTION_THRESHOLD
@@ -93,11 +146,42 @@ class LLMService:
                     "LLM correction resulted in unusually short text, using original"
                 )
                 return text
+
             return corrected_text
+
+        except queue.Empty:
+            logger.error(
+                f"Failed to acquire LLM instance after {config.LLM_REQUEST_TIMEOUT:.2f}s timeout. "
+            )
+            return text
 
         except Exception as e:
             logger.error(f"LLM text correction failed: {str(e)}")
             return text
 
+        finally:
+            if instance:
+                self.instance_queue.put(instance)
+
+    def warmup(self):
+        if not self.model_instances:
+            return
+
+        logger.info(f"Warming up {len(self.model_instances)} LLM instance(s)...")
+        for instance in self.model_instances:
+            if instance.is_available():
+                try:
+                    inst = self.instance_queue.get(timeout=5.0)
+                    inst.correct(
+                        prompt="Warm up the model",
+                    )
+                    self.instance_queue.put(inst)
+                    logger.info(f"Instance {instance.instance_id} warmed up")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to warm up instance {instance.instance_id}: {e}"
+                    )
+        logger.info("All LLM instances warmed up successfully")
+
     def is_available(self) -> bool:
-        return self.llm_model is not None
+        return len(self.model_instances) > 0

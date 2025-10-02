@@ -21,6 +21,7 @@ class Config:
         self.WHISPER_MODEL_SIZE = self._get_required_str("WHISPER_MODEL_SIZE")
         self.WHISPER_DEVICE = self._get_required_str("WHISPER_DEVICE")
         self.WHISPER_COMPUTE_TYPE = self._get_required_str("WHISPER_COMPUTE_TYPE")
+        self.WHISPER_DOWNLOAD_ROOT = self._get_required_str("WHISPER_DOWNLOAD_ROOT")
         self.LLM_MODEL_PATH = self._get_required_str("LLM_MODEL_PATH")
         self.LLM_N_CTX = self._get_required_int("LLM_N_CTX")
         self.LLM_N_THREADS = self._get_required_int("LLM_N_THREADS")
@@ -38,12 +39,17 @@ class Config:
         self.AUDIO_HEADER_SIZE = self._get_required_int("AUDIO_HEADER_SIZE")
 
         # Text Correction Configuration
+        self.LLM_POOL_SIZE = self._get_required_int("LLM_POOL_SIZE")
         self.LLM_MAX_TOKENS = self._get_required_int("LLM_MAX_TOKENS")
         self.LLM_TEMPERATURE = self._get_required_float("LLM_TEMPERATURE")
         self.LLM_TOP_P = self._get_required_float("LLM_TOP_P")
+        self.LLM_TOP_K = self._get_required_int("LLM_TOP_K")
+        self.LLM_N_BATCH = self._get_required_int("LLM_N_BATCH")
+        self.LLM_N_UBATCH = self._get_required_int("LLM_N_UBATCH")
         self.LLM_CORRECTION_THRESHOLD = self._get_required_float(
             "LLM_CORRECTION_THRESHOLD"
         )
+        self.LLM_REQUEST_TIMEOUT = self._get_required_float("LLM_REQUEST_TIMEOUT")
 
         # Logging Configuration
         self.LOG_LEVEL = self._get_required_str("LOG_LEVEL")

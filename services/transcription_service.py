@@ -22,6 +22,7 @@ class TranscriptionService:
                 config.WHISPER_MODEL_SIZE,
                 device=config.WHISPER_DEVICE,
                 compute_type=config.WHISPER_COMPUTE_TYPE,
+                download_root=config.WHISPER_DOWNLOAD_ROOT,
             )
             self.pipeline = BatchedInferencePipeline(
                 model=self.model,
