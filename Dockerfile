@@ -30,4 +30,4 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.t
     && rm -rf /wheels
 
 EXPOSE 50051
-CMD ["python", "-m", "server.server"]
+CMD ["python", "main.py"]

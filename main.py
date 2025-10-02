@@ -4,8 +4,7 @@ import time
 import logging
 import argparse
 
-from . import inference_pb2_grpc
-from . import inference_pb2
+from server import inference_pb2_grpc
 from services.inference_service import InferenceServiceImpl
 from config import config
 
@@ -34,7 +33,6 @@ def serve():
 
 
 def main():
-    """Main entry point"""
     parser = argparse.ArgumentParser(description="Audio Inference gRPC Server")
     parser.add_argument(
         "--port",

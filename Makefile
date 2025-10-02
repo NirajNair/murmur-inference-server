@@ -8,7 +8,7 @@ install:
 	source $(VENV_DIR)/bin/activate && pip3 install -r requirements.txt
 
 run:
-	source $(VENV_DIR)/bin/activate && clear && $(PYTHON) -m server.server
+	source $(VENV_DIR)/bin/activate && clear && $(PYTHON) main.py
 
 run-docker:
 	docker compose up -d
