@@ -10,13 +10,24 @@ install:
 run:
 	source $(VENV_DIR)/bin/activate && clear && $(PYTHON) main.py
 
-run-docker:
+build-image:
+	docker rmi murmur-inference-server:slim
+	docker build -t murmur-inference-server:latest .
+	slim build --target murmur-inference-server:latest \
+		--tag murmur-inference-server:slim \
+		--continue-after 10 \
+		--include-path /app \
+		--include-path /usr/local \
+		--include-path /usr/lib
+	docker rmi murmur-inference-server:latest
+	
+start-container:
 	docker compose up -d
 	
-stop-docker:
+stop-container:
 	docker compose down
 
-restart-docker: stop-docker run-docker
+restart-container: stop-container start-container
 	
 clean:
 	rm -rf $(VENV_DIR) __pycache__

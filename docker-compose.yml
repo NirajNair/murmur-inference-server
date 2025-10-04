@@ -1,6 +1,7 @@
 version: "3.8"
 services:
   murmur-inference-server:
+    image: murmur-inference-server:slim
     build: .
     ports:
       - 50051:50051
