@@ -12,8 +12,8 @@ class Config:
 
     def _load_config(self):
         # Server Configuration
-        self.SERVER_PORT = self._get_required_int("SERVER_PORT")
-        self.SERVER_HOST = self._get_required_str("SERVER_HOST")
+        self.GRPC_SERVER_PORT = self._get_required_int("GRPC_SERVER_PORT")
+        self.GRPC_SERVER_HOST = self._get_required_str("GRPC_SERVER_HOST")
         self.MAX_WORKERS = self._get_required_int("MAX_WORKERS")
         self.GRACE_PERIOD = self._get_required_int("GRACE_PERIOD")
 
@@ -31,7 +31,6 @@ class Config:
             "AUDIO_TARGET_SAMPLE_RATE"
         )
         self.AUDIO_TARGET_CHANNELS = self._get_required_int("AUDIO_TARGET_CHANNELS")
-        self.AUDIO_DEBUG_DIR = self._get_required_str("AUDIO_DEBUG_DIR")
         self.AUDIO_ZERO_THRESHOLD = self._get_required_float("AUDIO_ZERO_THRESHOLD")
         self.AUDIO_CHUNK_SIZE_THRESHOLD = self._get_required_int(
             "AUDIO_CHUNK_SIZE_THRESHOLD"
@@ -54,9 +53,6 @@ class Config:
         # Logging Configuration
         self.LOG_LEVEL = self._get_required_str("LOG_LEVEL")
         self.LOG_FORMAT = self._get_required_str("LOG_FORMAT")
-
-        # Performance Configuration
-        self.ENABLE_DEBUG_AUDIO = self._get_required_bool("ENABLE_DEBUG_AUDIO")
 
     def _get_required_str(self, key: str) -> str:
         value = os.getenv(key)
@@ -100,11 +96,6 @@ class Config:
         if os.path.isabs(self.LLM_MODEL_PATH):
             return self.LLM_MODEL_PATH
         return os.path.join(os.path.dirname(__file__), self.LLM_MODEL_PATH)
-
-    def get_audio_debug_dir(self) -> str:
-        if os.path.isabs(self.AUDIO_DEBUG_DIR):
-            return self.AUDIO_DEBUG_DIR
-        return os.path.join(os.path.dirname(__file__), "..", self.AUDIO_DEBUG_DIR)
 
 
 config = Config()

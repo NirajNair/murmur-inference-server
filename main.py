@@ -3,6 +3,7 @@ from concurrent import futures
 import time
 import logging
 import argparse
+from grpc_health.v1 import health, health_pb2_grpc, health_pb2
 
 from server import inference_pb2_grpc
 from services.inference_service import InferenceServiceImpl
@@ -16,7 +17,16 @@ def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=config.MAX_WORKERS))
     inference_service = InferenceServiceImpl()
     inference_pb2_grpc.add_InferenceServiceServicer_to_server(inference_service, server)
-    listen_addr = f"[{config.SERVER_HOST}]:{config.SERVER_PORT}"
+
+    health_servicer = health.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+
+    health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+    health_servicer.set(
+        "inference.InferenceService", health_pb2.HealthCheckResponse.SERVING
+    )
+
+    listen_addr = f"[{config.GRPC_SERVER_HOST}]:{config.GRPC_SERVER_PORT}"
     server.add_insecure_port(listen_addr)
     logger.info(
         f"Starting server on {listen_addr} with model '{config.WHISPER_MODEL_SIZE}' on '{config.WHISPER_DEVICE}'"
@@ -37,8 +47,8 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=config.SERVER_PORT,
-        help=f"Port to listen on (default: {config.SERVER_PORT})",
+        default=config.GRPC_SERVER_PORT,
+        help=f"Port to listen on (default: {config.GRPC_SERVER_PORT})",
     )
     parser.add_argument(
         "--model",

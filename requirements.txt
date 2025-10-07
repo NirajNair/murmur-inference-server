@@ -5,3 +5,4 @@ faster-whisper
 llama-cpp-python
 ffmpeg-python
 python-dotenv
+grpcio-health-checking

@@ -21,6 +21,18 @@ build-image:
 		--include-path /usr/lib
 	docker rmi murmur-inference-server:latest
 	
+build-image-prod:
+	docker rmi murmur-inference-server:slim
+	docker buildx build --platform linux/amd64 -t murmur-inference-server-prod:latest .
+	slim build --target murmur-inference-server-prod:latest \
+		--tag murmur-inference-server-prod:slim \
+		--continue-after 10 \
+		--include-path /app \
+		--include-path /usr/local \
+		--include-path /usr/lib
+	docker rmi murmur-inference-server-prod:latest
+	
+	
 start-container:
 	docker compose up -d
 	
