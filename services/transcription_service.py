@@ -28,6 +28,15 @@ class TranscriptionService:
                 model=self.model,
             )
             logger.info("Whisper model loaded successfully")
+            try:
+                import ctranslate2
+                gpu_count = ctranslate2.get_cuda_device_count()
+                if gpu_count > 0:
+                    logger.info(f"CUDA devices available: {gpu_count}")
+                else:
+                    logger.info("No CUDA devices detected")
+            except Exception:
+                logger.info("Could not check CUDA device count")
         except Exception as e:
             logger.error(f"Failed to load Whisper model: {str(e)}")
             raise

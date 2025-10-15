@@ -25,6 +25,7 @@ class Config:
         self.LLM_MODEL_PATH = self._get_required_str("LLM_MODEL_PATH")
         self.LLM_N_CTX = self._get_required_int("LLM_N_CTX")
         self.LLM_N_THREADS = self._get_required_int("LLM_N_THREADS")
+        self.LLM_N_GPU_LAYERS = self._get_optional_int("LLM_N_GPU_LAYERS", 0)
 
         # Audio Processing Configuration
         self.AUDIO_TARGET_SAMPLE_RATE = self._get_required_int(
@@ -87,6 +88,17 @@ class Config:
         if value is None:
             raise ValueError(f"Required environment variable '{key}' is not set")
         return value.lower() == "true"
+
+    def _get_optional_int(self, key: str, default: int) -> int:
+        value = os.getenv(key)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            raise ValueError(
+                f"Environment variable '{key}' must be an integer, got: {value}"
+            )
 
     def setup_logging(self):
         log_level = getattr(logging, self.LOG_LEVEL.upper(), logging.INFO)

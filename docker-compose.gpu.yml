@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  murmur-inference-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    container_name: murmur-inference-gpu
+    ports:
+      - "50051:50051"
+    volumes:
+      - ./models:/app/models
+      - ./.env:/app/.env
+    environment:
+      # Server Configuration
+      - GRPC_SERVER_PORT=50051
+      - GRPC_SERVER_HOST=::
+      - MAX_WORKERS=10
+      - GRACE_PERIOD=5
+      
+      # Whisper Model Configuration (GPU)
+      - WHISPER_MODEL_SIZE=small
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=float16
+      - WHISPER_DOWNLOAD_ROOT=/app/models
+      
+      # LLM Configuration (GPU)
+      - LLM_MODEL_PATH=/app/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
+      - LLM_N_CTX=2048
+      - LLM_N_THREADS=8
+      - LLM_N_GPU_LAYERS=-1
+      
+      # Audio Processing
+      - AUDIO_TARGET_SAMPLE_RATE=16000
+      - AUDIO_TARGET_CHANNELS=1
+      - AUDIO_ZERO_THRESHOLD=0.001
+      - AUDIO_CHUNK_SIZE_THRESHOLD=1000
+      - AUDIO_HEADER_SIZE=44
+      
+      # LLM Pool Configuration
+      - LLM_POOL_SIZE=2
+      - LLM_MAX_TOKENS=512
+      - LLM_TEMPERATURE=0.3
+      - LLM_TOP_P=0.9
+      - LLM_TOP_K=40
+      - LLM_N_BATCH=512
+      - LLM_N_UBATCH=512
+      - LLM_CORRECTION_THRESHOLD=0.3
+      - LLM_REQUEST_TIMEOUT=30.0
+      
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; channel = grpc.insecure_channel('localhost:50051'); channel.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+
+
+
+
+
+
+

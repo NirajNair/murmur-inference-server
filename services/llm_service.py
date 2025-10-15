@@ -3,7 +3,6 @@ import threading
 import time
 import queue
 from typing import Optional, List
-from llama_cpp import Llama
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -27,13 +26,29 @@ class LLMModelInstance:
                 n_threads=config.LLM_N_THREADS,
                 n_batch=config.LLM_N_BATCH,
                 n_ubatch=config.LLM_N_UBATCH,
+                n_gpu_layers=config.LLM_N_GPU_LAYERS,
                 verbose=False,
                 use_mlock=True,
                 top_k=config.LLM_TOP_K,
                 top_p=config.LLM_TOP_P,
                 temperature=config.LLM_TEMPERATURE,
             )
-            logger.info(f"LLM model instance {self.instance_id} loaded successfully")
+            if config.LLM_N_GPU_LAYERS < 0:
+                logger.info(f"LLM model instance {self.instance_id} loaded successfully with {config.LLM_N_GPU_LAYERS} GPU layers")
+            else:
+                logger.info(f"LLM model instance {self.instance_id} loaded successfully on CPU")
+            try:
+                import ctranslate2
+                gpu_count = ctranslate2.get_cuda_device_count()
+                if gpu_count > 0:
+                    if config.LLM_N_GPU_LAYERS < 0:
+                        logger.info(f"CUDA devices available: {gpu_count} (LLM using GPU with {config.LLM_N_GPU_LAYERS} layers)")
+                    else:
+                        logger.info(f"CUDA devices available: {gpu_count} (LLM using CPU)")
+                else:
+                    logger.info("No CUDA devices detected (LLM using CPU)")
+            except Exception:
+                logger.info("Could not check CUDA device count")
         except Exception as e:
             logger.error(
                 f"Failed to load LLM model instance {self.instance_id}: {str(e)}"
