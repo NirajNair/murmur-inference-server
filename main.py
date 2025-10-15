@@ -33,13 +33,8 @@ def serve():
     )
     server.start()
     logger.info("Server started successfully")
-    try:
-        while True:
-            time.sleep(86400)
-    except KeyboardInterrupt:
-        logger.info("Shutting down server...")
-        server.stop(grace_period=config.GRACE_PERIOD)
-        logger.info("Server stopped")
+    logger.info("Press Ctrl+C to stop the server")
+    server.wait_for_termination()
 
 
 def main():
