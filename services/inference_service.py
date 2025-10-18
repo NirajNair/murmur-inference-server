@@ -39,6 +39,16 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
                 return inference_pb2.TextResponse(text="")
 
             try:
+                transcription_text = (
+                    self.transcription_service.transcribe_audio_with_groq(
+                        audio_chunks
+                    )
+                )
+                return inference_pb2.TextResponse(text=transcription_text)
+            except Exception as e:
+                logger.error(str(e))
+
+            try:
                 combined_audio_bytes = reconstruct_wav_from_chunks(audio_chunks)
                 inspection = inspect_audio_bytes(combined_audio_bytes)
                 logger.info(f"Reconstructed audio inspection: {inspection}")
@@ -87,10 +97,8 @@ class InferenceServiceImpl(inference_pb2_grpc.InferenceServiceServicer):
                 return inference_pb2.TextResponse(text="")
 
             try:
-                transcription_text = (
-                    self.transcription_service.transcribe_audio(
-                        pcm_audio
-                    )
+                transcription_text = self.transcription_service.transcribe_audio(
+                    pcm_audio
                 )
                 return inference_pb2.TextResponse(text=transcription_text)
 

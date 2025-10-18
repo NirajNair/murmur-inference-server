@@ -1,10 +1,9 @@
 import logging
-import threading
-import time
 import queue
 from typing import Optional, List
 from llama_cpp import Llama
 from config import config
+from groq import Groq
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,7 @@ class LLMService:
         self.instance_queue: queue.Queue = queue.Queue()
         self._load_model_pool()
         self.warmup()
+        self.groq: Groq = Groq(api_key=config.GROQ_API_KEY)
 
     def _load_model_pool(self):
         logger.info(f"Creating LLM pool with {self.pool_size} instance(s)")
@@ -90,7 +90,7 @@ class LLMService:
                 f"LLM pool ready with {len(self.model_instances)}/{self.pool_size} instances. "
             )
 
-    def _create_correction_prompt(self, text: str) -> str:
+    def _get_system_prompt(self) -> str:
         return f"""You are an expert text correction assistant specialized in fixing speech-to-text transcription errors. Your task is to correct grammar, spelling, punctuation, and formatting while preserving the original meaning and intent.
 
             Primary Corrections:
@@ -124,9 +124,10 @@ class LLMService:
             • Retain the languages present in the input
             • When uncertain about a correction, err on the side of minimal changes
             • Never translate or alter words in any language other than English; retain all original foreign-language text verbatim.
-
-            Please correct this transcribed text: {text}\n\nCorrected:
             """
+
+    def _create_correction_prompt(self, text: str) -> str:
+        return f"{self._get_system_prompt()}\n\nPlease correct this transcribed text: {text}\n\nCorrected:"
 
     def correct_text(self, text: str) -> str:
         if not self.model_instances or not text.strip():
@@ -134,6 +135,11 @@ class LLMService:
 
         instance: Optional[LLMModelInstance] = None
         try:
+            try:
+                return self._get_correct_text_from_groq(text)
+            except Exception as e:
+                logger.error(f"Failed to correct text with Groq: {str(e)}")
+                pass
             instance = self.instance_queue.get(timeout=config.LLM_REQUEST_TIMEOUT)
             corrected_text = instance.correct(
                 prompt=self._create_correction_prompt(text),
@@ -162,6 +168,27 @@ class LLMService:
         finally:
             if instance:
                 self.instance_queue.put(instance)
+
+    def _get_correct_text_from_groq(self, text: str) -> str:
+        try:
+            completion = self.groq.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[
+                    {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "user", "content": text},
+                ],
+                temperature=1,
+                max_completion_tokens=2048,
+                top_p=1,
+                reasoning_effort="low",
+                stream=False,
+                stop=None,
+            )
+            content = completion.choices[0].message.content
+            return content.strip()
+        except Exception as e:
+            logger.error(f"Failed to correct text with Groq: {str(e)}")
+            return text
 
     def warmup(self):
         if not self.model_instances:

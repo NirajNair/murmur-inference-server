@@ -3,6 +3,9 @@ from typing import Optional
 from faster_whisper import WhisperModel, BatchedInferencePipeline
 import numpy as np
 from config import config
+from groq import Groq
+import io
+import soundfile as sf
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +15,7 @@ class TranscriptionService:
         self.model: Optional[WhisperModel] = None
         self.pipeline: Optional[BatchedInferencePipeline] = None
         self._load_model()
+        self.groq: Groq = Groq(api_key=config.GROQ_API_KEY)
 
     def _load_model(self):
         try:
@@ -59,3 +63,19 @@ class TranscriptionService:
         except Exception as e:
             logger.error(f"Transcription failed: {str(e)}")
             raise
+
+    def transcribe_audio_with_groq(self, audio_chunks: list[bytes]) -> str:
+        audio_file = io.BytesIO(b"".join(audio_chunks))
+        audio_file.name = "audio.wav"
+        audio_file.seek(0)
+        try:
+            transcription = self.groq.audio.transcriptions.create(
+                file=audio_file,
+                model="whisper-large-v3-turbo",
+                temperature=0,
+                response_format="verbose_json",
+            )
+            print(transcription.text)
+            return transcription.text.strip()
+        except Exception as e:
+            raise RuntimeError(f"Failed to transcribe audio with Groq: {str(e)}")
