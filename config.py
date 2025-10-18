@@ -1,6 +1,5 @@
 import os
 import logging
-from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -53,6 +52,8 @@ class Config:
         # Logging Configuration
         self.LOG_LEVEL = self._get_required_str("LOG_LEVEL")
         self.LOG_FORMAT = self._get_required_str("LOG_FORMAT")
+
+        self.GROQ_API_KEY = self._get_required_str("GROQ_API_KEY")
 
     def _get_required_str(self, key: str) -> str:
         value = os.getenv(key)
