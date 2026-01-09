@@ -188,7 +188,7 @@ class LLMService:
             return content.strip()
         except Exception as e:
             logger.error(f"Failed to correct text with Groq: {str(e)}")
-            return text
+            raise
 
     def warmup(self):
         if not self.model_instances:
